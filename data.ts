@@ -16,11 +16,47 @@ const mapCategory = (name: string, cat: string): Category => {
   if (combined.includes('dairy') || combined.includes('cheese') || combined.includes('milk')) return Category.DAIRY;
   if (combined.includes('snack') || combined.includes('sweet') || combined.includes('candy') || combined.includes('chocolate')) return Category.SNACKS;
 
-  return Category.PANTRY; // Default for Pantry, Meat, Spices, and former Beverages
+  if (combined.includes('pantry') || combined.includes('spice') || combined.includes('meat') || combined.includes('oil') || combined.includes('sauce') || combined.includes('canned') || combined.includes('grain') || combined.includes('bread') || combined.includes('pasta') || combined.includes('rice')) {
+    return Category.PANTRY;
+  }
+
+  return Category.OTHER; // Default for miscellaneous items
+
 };
 
-// Limit to top 2000 for performance while keeping it massive
-export const products: Product[] = rawIngredients.slice(0, 2000).map((ing: any) => ({
+// Priority list for "Better" options
+const POPULAR_ITEMS = [
+  'Tomato', 'Potato', 'Onion', 'Garlic', 'Carrot', 'Spinach', 'Broccoli', 'Cucumber', 'Pumpkin', // Veg
+  'Apple', 'Banana', 'Orange', 'Strawberry', 'Grape', 'Lemon', 'Lime', 'Mango', // Fruits
+  'Milk', 'Butter', 'Cheese', 'Yogurt', 'Cream', 'Egg', // Dairy
+  'Rice', 'Pasta', 'Bread', 'Flour', 'Oil', 'Salt', 'Sugar', 'Honey', 'Coffee', 'Tea', 'Water', // Pantry
+  'Chocolate', 'Chip', 'Cookie', 'Nut', 'Popcorn', 'Cracker' // Snacks
+];
+
+// Sort ingredients to prioritize popular ones
+const sortedIngredients = rawIngredients.sort((a: any, b: any) => {
+  const aName = a.name.toLowerCase();
+  const bName = b.name.toLowerCase();
+
+  // Check if matches any popular item
+  const aPopular = POPULAR_ITEMS.find(k => aName.includes(k.toLowerCase()));
+  const bPopular = POPULAR_ITEMS.find(k => bName.includes(k.toLowerCase()));
+
+  // If both popular, prioritize shorter names (likely closer to "Whole" item)
+  if (aPopular && bPopular) {
+    if (aName.length !== bName.length) return aName.length - bName.length;
+    return 0;
+  }
+
+  // If one is popular, prioritize it
+  if (aPopular) return -1;
+  if (bPopular) return 1;
+
+  return 0;
+});
+
+// Use sorted list but reshuffle slightly to avoid all "Apples" being together
+export const products: Product[] = sortedIngredients.slice(0, 2000).map((ing: any) => ({
   id: ing.objectID,
   name: ing.name,
   price: Math.floor(Math.random() * 15) + 1.99, // Random price for demo
