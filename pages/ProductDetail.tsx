@@ -5,7 +5,10 @@ import { Button, Badge, SafeImage } from '../components/ui';
 import { ProductCard } from '../components/ProductCard';
 import { algoliasearch } from 'algoliasearch';
 
-const client = algoliasearch('ZILYM2P9WA', 'e772dfcd775fb33c4e017f14b7c245ed');
+const client = algoliasearch(
+  import.meta.env.VITE_ALGOLIA_APP_ID || '',
+  import.meta.env.VITE_ALGOLIA_SEARCH_KEY || ''
+);
 
 interface Recipe {
   objectID: string;

@@ -5,7 +5,10 @@ import { Icons } from '../components/Icon';
 import { Category, DietaryTag, SortOption } from '../types';
 import { algoliasearch } from 'algoliasearch';
 
-const client = algoliasearch('ZILYM2P9WA', 'e772dfcd775fb33c4e017f14b7c245ed');
+const client = algoliasearch(
+  import.meta.env.VITE_ALGOLIA_APP_ID || '',
+  import.meta.env.VITE_ALGOLIA_SEARCH_KEY || ''
+);
 
 export const Home: React.FC = () => {
   const { allProducts, searchQuery, setSearchQuery, navigate } = useStore();
