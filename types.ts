@@ -18,8 +18,7 @@ export enum Category {
   FRUITS = 'Fruits',
   PANTRY = 'Pantry',
   DAIRY = 'Dairy',
-  SNACKS = 'Snacks',
-  BEVERAGES = 'Beverages'
+  SNACKS = 'Snacks'
 }
 
 export enum DietaryTag {
