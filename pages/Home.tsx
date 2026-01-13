@@ -224,16 +224,16 @@ export const Home: React.FC = () => {
                   </button>
                 </div>
               )}
-              {/* Algolia Powered Recipe Suggestions */}
+              {/* Recipe Suggestion powered by Algolia */}
               {searchQuery && (recipes.length > 0 || loadingRecipes) && (
                 <div className="mt-24 pt-16 border-t border-white/5 animate-fade-in">
                   <div className="flex items-center justify-between mb-12">
                     <div className="space-y-1">
                       <div className="flex items-center gap-3">
                         <div className="w-1.5 h-6 bg-[#C6A355] rounded-full" />
-                        <h3 className="text-2xl font-display font-medium text-white">Suggested Recipes</h3>
+                        <h3 className="text-2xl font-display font-medium text-white">Recipe Suggestion powered by <span className="text-blue-400">Algolia</span></h3>
                       </div>
-                      <p className="text-[10px] font-black uppercase tracking-widest text-white/20 pl-5">Intelligence powered by Algolia</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-white/20 pl-5">Intelligence powered by <span className="text-blue-400">Algolia</span></p>
                     </div>
                   </div>
 

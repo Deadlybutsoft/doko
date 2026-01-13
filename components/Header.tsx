@@ -41,7 +41,7 @@ export const Header: React.FC = () => {
             />
             <div className="absolute right-4 top-1/2 -translate-y-1/2 flex items-center gap-2 pointer-events-none">
               <div className="w-px h-4 bg-white/10 mx-2" />
-              <span className="text-[8px] font-black text-white/40 uppercase tracking-[0.15em] whitespace-nowrap">Powered by Algolia</span>
+              <span className="text-[8px] font-black text-white/40 uppercase tracking-[0.15em] whitespace-nowrap">Powered by <span className="text-blue-400">Algolia</span></span>
             </div>
           </div>
         </div>

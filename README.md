@@ -4,7 +4,7 @@
 
 ![DOKO Banner](https://img.shields.io/badge/DOKO-Intelligent%20Grocery%20Discovery-C6A355?style=for-the-badge&labelColor=0D0D0D)
 
-**Where premium ingredients meet recipe intelligence.**
+**Where premium ingredients meet Recipe Suggestion powered by Algolia.**
 
 [![Built with Algolia](https://img.shields.io/badge/Powered%20by-Algolia-5468FF?style=flat-square&logo=algolia&logoColor=white)](https://www.algolia.com/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?style=flat-square&logo=react&logoColor=white)](https://reactjs.org/)
@@ -36,7 +36,7 @@ When you view an ingredient, DOKO instantly suggests recipes that use it. When y
 - Real-time search-as-you-type with sub-50ms response times
 - Smart query understanding that finds what you mean, not just what you type
 
-### 🍳 Recipe Intelligence Engine
+### 🍳 Recipe Suggestion Engine
 - Powered by Algolia's `food` index containing thousands of professional recipes
 - **Ingredient-based matching**: View "Lemon" → See recipes that actually contain lemon
 - Visual badge system: "Uses [Ingredient]" confirms why each recipe is relevant
@@ -135,7 +135,7 @@ doko/
 │   └── WishlistDrawer.tsx  # Saved items collection
 ├── pages/
 │   ├── Home.tsx            # Main catalog + recipe suggestions
-│   ├── ProductDetail.tsx   # Product view + Recipe Intelligence
+│   ├── ProductDetail.tsx   # Product view + Recipe Suggestion
 │   └── RecipeDetail.tsx    # Full recipe with ingredient shopping
 ├── context/
 │   └── StoreContext.tsx    # Global state management

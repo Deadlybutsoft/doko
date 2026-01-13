@@ -259,20 +259,20 @@ export const ProductDetail: React.FC<{ productId: string }> = ({ productId }) =>
           </div>
         </div>
 
-        {/* Recipe Intelligence Section - Full Width */}
+        {/* Recipe Suggestion Section - Full Width */}
         <div className="mt-20 pt-16 border-t border-white/5">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-8 mb-16">
             <div className="space-y-4">
               <div className="flex items-center gap-3">
                 <div className="w-1.5 h-8 bg-white rounded-full" />
-                <h3 className="text-4xl font-display font-medium tracking-tight">Recipe Intelligence</h3>
+                <h3 className="text-4xl font-display font-medium tracking-tight">Recipe Suggestion powered by <span className="text-blue-400">Algolia</span></h3>
               </div>
               <p className="text-brand-secondary/40 font-light text-xl max-w-2xl">
                 Curation of professional culinary applications for <span className="text-white font-medium underline underline-offset-8 decoration-white/20">"{product.name}"</span>
               </p>
             </div>
             <div className="flex items-center gap-4 bg-white/5 px-4 py-2 rounded-full border border-white/10 shrink-0">
-              <span className="text-[10px] font-black tracking-[0.2em] text-white/30 uppercase">Algolia</span>
+              <span className="text-[10px] font-black tracking-[0.2em] text-blue-400 uppercase">Algolia</span>
               <div className="w-px h-3 bg-white/10" />
               <span className="text-[10px] font-black tracking-[0.2em] text-white uppercase">Ready</span>
             </div>
