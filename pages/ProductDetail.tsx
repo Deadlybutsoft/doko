@@ -297,22 +297,15 @@ export const ProductDetail: React.FC<{ productId: string }> = ({ productId }) =>
                       <h4 className="font-display font-bold text-2xl leading-[1.2] pr-4 text-white group-hover:text-[#C6A355] transition-colors">
                         {recipe.title}
                       </h4>
-                      <div className="flex items-center gap-3 shrink-0">
-                        {recipe.ingredients.some(i => cleanIngredientName(i).includes(cleanIngredientName(product.name))) && (
-                          <div className="px-3 py-1 bg-[#C6A355]/20 border border-[#C6A355]/30 rounded-full">
-                            <span className="text-[9px] font-black uppercase tracking-widest text-[#C6A355]">Uses {cleanIngredientName(product.name)}</span>
-                          </div>
-                        )}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleSaveRecipe(recipe);
-                          }}
-                          className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isRecipeSaved(recipe.objectID) ? 'bg-white text-black' : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
-                        >
-                          <Icons.Heart className={`w-5 h-5 ${isRecipeSaved(recipe.objectID) ? 'fill-current' : ''}`} />
-                        </button>
-                      </div>
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleSaveRecipe(recipe);
+                        }}
+                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isRecipeSaved(recipe.objectID) ? 'bg-white text-black' : 'bg-white/5 text-white/40 hover:text-white hover:bg-white/10'}`}
+                      >
+                        <Icons.Heart className={`w-5 h-5 ${isRecipeSaved(recipe.objectID) ? 'fill-current' : ''}`} />
+                      </button>
                     </div>
 
                     <p className="text-brand-secondary/60 line-clamp-2 text-sm leading-relaxed mb-8 h-10">
@@ -321,6 +314,11 @@ export const ProductDetail: React.FC<{ productId: string }> = ({ productId }) =>
 
                     <div className="flex items-center justify-between pt-6 border-t border-white/5">
                       <div className="flex items-center gap-4">
+                        {recipe.ingredients.some(i => cleanIngredientName(i).includes(cleanIngredientName(product.name))) && (
+                          <div className="px-2 py-1 bg-[#C6A355]/20 border border-[#C6A355]/30 rounded-md">
+                            <span className="text-[8px] font-black uppercase tracking-widest text-[#C6A355]">Uses {cleanIngredientName(product.name)}</span>
+                          </div>
+                        )}
                         <div className="flex items-center gap-2">
                           <div className="w-1.5 h-1.5 rounded-full bg-[#C6A355]" />
                           <span className="text-[10px] font-bold text-white uppercase tracking-widest">{recipe.ingredients.length} Ingredients</span>
