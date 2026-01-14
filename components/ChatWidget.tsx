@@ -226,16 +226,7 @@ const ChatWidget: React.FC = () => {
         });
 
         return model.startChat({
-            history: [
-                {
-                    role: 'user',
-                    parts: [{ text: 'Hello, who are you?' }],
-                },
-                {
-                    role: 'model',
-                    parts: [{ text: INITIAL_MESSAGES[0].text }],
-                },
-            ],
+            history: [],
         });
     };
 
