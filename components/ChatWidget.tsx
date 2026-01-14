@@ -4,6 +4,7 @@ import { GoogleGenAI, Chat } from "@google/genai";
 import { algoliasearch } from 'algoliasearch';
 import { Message, Agent } from '../types';
 import { products } from '../data';
+import { useStore } from '../context/StoreContext';
 
 // Initialize Algolia client
 const algoliaClient = algoliasearch(
@@ -47,18 +48,25 @@ const searchRecipes = async (query: string): Promise<string> => {
 };
 
 // Enhanced system prompt with retrieval instructions
-const SYSTEM_PROMPT = `You are DOKO Support, a premium culinary assistant for a luxury grocery platform called DOKO.
+const getSystemPrompt = (cartInfo: string, savedRecipesInfo: string, wishlistInfo: string) => `You are DOKO Support, a premium culinary assistant for a luxury grocery platform called DOKO.
 
 YOUR CAPABILITIES:
 1. You have access to DOKO's inventory of 23,000+ premium ingredients
 2. You can search professional recipe databases powered by Algolia
 3. You can help customers find ingredients, suggest recipes, and answer culinary questions
+4. You have access to this user's shopping data
+
+CURRENT USER'S DATA:
+${cartInfo}
+${savedRecipesInfo}
+${wishlistInfo}
 
 BEHAVIOR GUIDELINES:
 - Keep responses concise (2-3 sentences max)
 - Be helpful, sophisticated, and knowledgeable about food
 - When you receive [SEARCH RESULTS], use that real data to inform your response
 - If asked about specific ingredients or recipes, reference the search results provided
+- If the user asks about their cart, saved recipes, or wishlist, use the data above
 - Always maintain a professional yet warm tone
 - When recommending products, mention their category and price when available
 
@@ -84,6 +92,7 @@ const INGREDIENT_KEYWORDS = ['ingredient', 'have', 'stock', 'find', 'looking for
 const RECIPE_KEYWORDS = ['recipe', 'cook', 'make', 'prepare', 'dish', 'meal', 'dinner', 'lunch', 'breakfast'];
 
 const ChatWidget: React.FC = () => {
+    const { cart, cartTotal, savedRecipes, wishlist, getProduct } = useStore();
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
     const [inputValue, setInputValue] = useState('');
@@ -95,6 +104,28 @@ const ChatWidget: React.FC = () => {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const chatSessionRef = useRef<Chat | null>(null);
 
+    // Build user context strings
+    const getCartInfo = () => {
+        if (cart.length === 0) return 'Shopping Cart: Empty';
+        const items = cart.map(item => `  - ${item.name} (x${item.quantity}) - $${(item.price * item.quantity).toFixed(2)}`).join('\n');
+        return `Shopping Cart (${cart.length} items, Total: $${cartTotal.toFixed(2)}):\n${items}`;
+    };
+
+    const getSavedRecipesInfo = () => {
+        if (savedRecipes.length === 0) return 'Saved Recipes: None';
+        const recipes = savedRecipes.slice(0, 5).map(r => `  - "${r.title}"`).join('\n');
+        return `Saved Recipes (${savedRecipes.length}):\n${recipes}`;
+    };
+
+    const getWishlistInfo = () => {
+        if (wishlist.length === 0) return 'Wishlist: Empty';
+        const items = wishlist.slice(0, 5).map(id => {
+            const product = getProduct(id);
+            return product ? `  - ${product.name}` : null;
+        }).filter(Boolean).join('\n');
+        return `Wishlist (${wishlist.length} items):\n${items}`;
+    };
+
     const startNewSession = () => {
         const apiKey = import.meta.env.VITE_GOOGLE_AI_API_KEY;
         if (!apiKey) {
@@ -102,10 +133,11 @@ const ChatWidget: React.FC = () => {
             return null;
         }
         const ai = new GoogleGenAI({ apiKey });
+        const systemPrompt = getSystemPrompt(getCartInfo(), getSavedRecipesInfo(), getWishlistInfo());
         return ai.chats.create({
             model: 'gemini-2.5-flash',
             config: {
-                systemInstruction: SYSTEM_PROMPT,
+                systemInstruction: systemPrompt,
             },
             history: [
                 {
