@@ -9,6 +9,7 @@ import { Profile } from './pages/Profile';
 
 import { WishlistDrawer } from './components/WishlistDrawer';
 import { RecipeDetail } from './pages/RecipeDetail';
+import ChatWidget from './components/ChatWidget';
 
 const AppContent: React.FC = () => {
   const { currentRoute } = useStore();
@@ -65,6 +66,7 @@ const AppContent: React.FC = () => {
       </footer>
       <CartDrawer />
       <WishlistDrawer />
+      <ChatWidget />
     </div>
   );
 };

@@ -60,3 +60,16 @@ export interface Recipe {
   instructions: string;
   image: string;
 }
+
+export interface Message {
+  id: string;
+  text: string;
+  sender: 'user' | 'agent';
+  timestamp: Date;
+}
+
+export interface Agent {
+  name: string;
+  avatar: string;
+  status: 'online' | 'offline';
+}
