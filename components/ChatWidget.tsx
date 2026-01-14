@@ -444,6 +444,12 @@ const ChatWidget: React.FC = () => {
                         >
                             Pasta recipe?
                         </button>
+                        <button
+                            onClick={() => handlePromptClick("Any keto-friendly snack ideas?")}
+                            className="whitespace-nowrap px-4 py-2 rounded-full bg-gray-100 text-[11px] font-bold text-black border border-black/5 hover:bg-black hover:text-white transition-all active:scale-95"
+                        >
+                            Keto snacks?
+                        </button>
                     </div>
                     <div className="relative flex flex-col items-center">
                         <form
