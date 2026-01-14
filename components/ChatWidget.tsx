@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageCircle, X, ArrowUp, Trash2, Copy, Check, Search } from 'lucide-react';
 import { GoogleGenAI, Chat } from "@google/genai";
-import algoliasearch from 'algoliasearch';
+import { algoliasearch } from 'algoliasearch';
 import { Message, Agent } from '../types';
 import { products } from '../data';
 
@@ -157,6 +157,15 @@ const ChatWidget: React.FC = () => {
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             handleSendMessage();
+        }
+    };
+
+    const handlePromptClick = (prompt: string) => {
+        setInputValue(prompt);
+        if (textareaRef.current) {
+            textareaRef.current.focus();
+            textareaRef.current.style.height = 'auto';
+            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
         }
     };
 
@@ -421,13 +430,27 @@ const ChatWidget: React.FC = () => {
                 </div>
 
                 {/* Input Area */}
-                <div className="px-5 pt-4 pb-2 bg-white shrink-0 border-t border-gray-50">
+                <div className="px-5 pt-2 pb-2 bg-white shrink-0 border-t border-gray-50">
+                    <div className="flex gap-2 mb-3 overflow-x-auto hide-scrollbar px-1">
+                        <button
+                            onClick={() => handlePromptClick("Do you have organic tomatoes?")}
+                            className="whitespace-nowrap px-4 py-2 rounded-full bg-gray-100 text-[11px] font-bold text-black border border-black/5 hover:bg-black hover:text-white transition-all active:scale-95"
+                        >
+                            Organic tomatoes?
+                        </button>
+                        <button
+                            onClick={() => handlePromptClick("Suggest a simple pasta recipe")}
+                            className="whitespace-nowrap px-4 py-2 rounded-full bg-gray-100 text-[11px] font-bold text-black border border-black/5 hover:bg-black hover:text-white transition-all active:scale-95"
+                        >
+                            Pasta recipe?
+                        </button>
+                    </div>
                     <div className="relative flex flex-col items-center">
                         <form
                             onSubmit={handleSendMessage}
                             className="w-full relative group transition-all duration-300"
                         >
-                            <div className="flex items-center space-x-4 bg-gray-50 border-[1.5px] border-gray-200 focus-within:border-black focus-within:bg-white focus-within:shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] px-6 py-4 transition-all">
+                            <div className="flex items-center space-x-4 bg-gray-50 border-[1.5px] border-black focus-within:bg-white focus-within:shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] px-6 py-4 transition-all">
                                 <textarea
                                     ref={textareaRef}
                                     value={inputValue}
