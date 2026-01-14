@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, ArrowUp, Trash2, Copy, Check, Search } from 'lucide-react';
+import { MessageCircle, X, ArrowUp, Trash2, Copy, Check, Search, ShoppingCart, ExternalLink, BookOpen } from 'lucide-react';
 import { GoogleGenAI, Chat } from "@google/genai";
 import { algoliasearch } from 'algoliasearch';
-import { Message, Agent } from '../types';
+import { Message, Agent, Product, Recipe } from '../types';
 import { products } from '../data';
 import { useStore } from '../context/StoreContext';
 
@@ -12,42 +12,86 @@ const algoliaClient = algoliasearch(
     import.meta.env.VITE_ALGOLIA_SEARCH_KEY
 );
 
+// Extended message type with actions
+interface ChatMessage extends Message {
+    actions?: MessageAction[];
+    recipeCards?: RecipeCard[];
+    productCards?: ProductCard[];
+}
+
+interface MessageAction {
+    type: 'add_to_cart' | 'view_product' | 'view_recipe';
+    label: string;
+    productId?: string;
+    recipeId?: string;
+    productName?: string;
+}
+
+interface RecipeCard {
+    id: string;
+    title: string;
+    ingredientCount: number;
+    image?: string;
+}
+
+interface ProductCard {
+    id: string;
+    name: string;
+    price: number;
+    category: string;
+    image?: string;
+}
+
 // Search functions for Algolia retrieval
-const searchIngredients = async (query: string): Promise<string> => {
-    // Search local products (from ingredients_final.json)
+const searchIngredients = async (query: string): Promise<{ text: string; products: ProductCard[] }> => {
     const localResults = products.filter(p =>
         p.name.toLowerCase().includes(query.toLowerCase()) ||
         p.category.toLowerCase().includes(query.toLowerCase())
     ).slice(0, 5);
 
     if (localResults.length > 0) {
-        return localResults.map(p =>
-            `- ${p.name} (${p.category}) - $${p.price.toFixed(2)}`
+        const text = localResults.map(p =>
+            `- ${p.name} (${p.category}) - $${p.price.toFixed(2)} [ID:${p.id}]`
         ).join('\n');
+        const productCards = localResults.map(p => ({
+            id: p.id,
+            name: p.name,
+            price: p.price,
+            category: p.category,
+            image: p.image
+        }));
+        return { text, products: productCards };
     }
-    return 'No ingredients found matching your query.';
+    return { text: 'No ingredients found matching your query.', products: [] };
 };
 
-const searchRecipes = async (query: string): Promise<string> => {
+const searchRecipes = async (query: string): Promise<{ text: string; recipes: RecipeCard[] }> => {
     try {
         const { hits } = await algoliaClient.search([{
             indexName: 'food',
-            params: { query, hitsPerPage: 5 }
+            params: { query, hitsPerPage: 3 }
         }]).then(res => res.results[0] as any);
 
         if (hits && hits.length > 0) {
-            return hits.map((hit: any) =>
-                `- "${hit.title}" (${hit.ingredients?.length || 0} ingredients)`
+            const text = hits.map((hit: any) =>
+                `- "${hit.title}" (${hit.ingredients?.length || 0} ingredients) [ID:${hit.objectID}]`
             ).join('\n');
+            const recipeCards = hits.map((hit: any) => ({
+                id: hit.objectID,
+                title: hit.title,
+                ingredientCount: hit.ingredients?.length || 0,
+                image: hit.image
+            }));
+            return { text, recipes: recipeCards };
         }
-        return 'No recipes found matching your query.';
+        return { text: 'No recipes found matching your query.', recipes: [] };
     } catch (error) {
         console.error('Recipe search error:', error);
-        return 'Unable to search recipes at the moment.';
+        return { text: 'Unable to search recipes at the moment.', recipes: [] };
     }
 };
 
-// Enhanced system prompt with retrieval instructions
+// Enhanced system prompt with action instructions
 const getSystemPrompt = (cartInfo: string, savedRecipesInfo: string, wishlistInfo: string) => `You are DOKO Support, a premium culinary assistant for a luxury grocery platform called DOKO.
 
 YOUR CAPABILITIES:
@@ -65,14 +109,14 @@ BEHAVIOR GUIDELINES:
 - Keep responses concise (2-3 sentences max)
 - Be helpful, sophisticated, and knowledgeable about food
 - When you receive [SEARCH RESULTS], use that real data to inform your response
-- If asked about specific ingredients or recipes, reference the search results provided
+- Reference product IDs when recommending items so users can add them to cart
 - If the user asks about their cart, saved recipes, or wishlist, use the data above
 - Always maintain a professional yet warm tone
-- When recommending products, mention their category and price when available
+- When recommending products, mention their category and price
 
 You are connected to Algolia's search infrastructure for real-time inventory and recipe data.`;
 
-const INITIAL_MESSAGES: Message[] = [
+const INITIAL_MESSAGES: ChatMessage[] = [
     {
         id: '1',
         text: 'Welcome to Doko. I am Doko Support, connected to our inventory of 23,000+ ingredients and professional recipe database. How may I assist you today?',
@@ -88,17 +132,19 @@ const AGENT: Agent = {
 };
 
 // Keywords that trigger search
-const INGREDIENT_KEYWORDS = ['ingredient', 'have', 'stock', 'find', 'looking for', 'need', 'buy', 'purchase', 'get', 'available'];
-const RECIPE_KEYWORDS = ['recipe', 'cook', 'make', 'prepare', 'dish', 'meal', 'dinner', 'lunch', 'breakfast'];
+const INGREDIENT_KEYWORDS = ['ingredient', 'have', 'stock', 'find', 'looking for', 'need', 'buy', 'purchase', 'get', 'available', 'tomato', 'cheese', 'chicken', 'beef', 'vegetable', 'fruit'];
+const RECIPE_KEYWORDS = ['recipe', 'cook', 'make', 'prepare', 'dish', 'meal', 'dinner', 'lunch', 'breakfast', 'suggest'];
 
 const ChatWidget: React.FC = () => {
-    const { cart, cartTotal, savedRecipes, wishlist, getProduct } = useStore();
+    const { cart, cartTotal, savedRecipes, wishlist, getProduct, addToCart, navigate } = useStore();
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
+    const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
     const [inputValue, setInputValue] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
     const [isSearching, setIsSearching] = useState(false);
+    const [lastSearchProducts, setLastSearchProducts] = useState<ProductCard[]>([]);
+    const [lastSearchRecipes, setLastSearchRecipes] = useState<RecipeCard[]>([]);
 
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -158,6 +204,8 @@ const ChatWidget: React.FC = () => {
 
     const handleClearChat = () => {
         setMessages(INITIAL_MESSAGES);
+        setLastSearchProducts([]);
+        setLastSearchRecipes([]);
         chatSessionRef.current = startNewSession();
     };
 
@@ -211,6 +259,32 @@ const ChatWidget: React.FC = () => {
         }
     };
 
+    // Action handlers
+    const handleAddToCart = (productId: string) => {
+        const product = getProduct(productId);
+        if (product) {
+            addToCart(product, 1);
+            // Add confirmation message
+            const confirmMsg: ChatMessage = {
+                id: Date.now().toString(),
+                text: `✓ Added "${product.name}" to your cart!`,
+                sender: 'agent',
+                timestamp: new Date(),
+            };
+            setMessages(prev => [...prev, confirmMsg]);
+        }
+    };
+
+    const handleViewProduct = (productId: string) => {
+        navigate(`/product/${productId}`);
+        setIsOpen(false);
+    };
+
+    const handleViewRecipe = (recipeId: string) => {
+        navigate(`/recipe/${recipeId}`);
+        setIsOpen(false);
+    };
+
     // Detect if query needs retrieval and what type
     const analyzeQuery = (query: string): { needsIngredientSearch: boolean; needsRecipeSearch: boolean; searchTerms: string } => {
         const lowerQuery = query.toLowerCase();
@@ -230,7 +304,7 @@ const ChatWidget: React.FC = () => {
 
         const userText = inputValue.trim();
 
-        const newUserMessage: Message = {
+        const newUserMessage: ChatMessage = {
             id: Date.now().toString(),
             text: userText,
             sender: 'user',
@@ -251,8 +325,7 @@ const ChatWidget: React.FC = () => {
             text: '',
             sender: 'agent',
             timestamp: new Date(),
-            isStreaming: true
-        } as Message & { isStreaming?: boolean }]);
+        } as ChatMessage]);
 
         try {
             if (!chatSessionRef.current) {
@@ -264,6 +337,8 @@ const ChatWidget: React.FC = () => {
                 const { needsIngredientSearch, needsRecipeSearch, searchTerms } = analyzeQuery(userText);
 
                 let contextualPrompt = userText;
+                let foundProducts: ProductCard[] = [];
+                let foundRecipes: RecipeCard[] = [];
 
                 // Perform Algolia retrieval if needed
                 if (needsIngredientSearch || needsRecipeSearch) {
@@ -272,12 +347,16 @@ const ChatWidget: React.FC = () => {
 
                     if (needsIngredientSearch) {
                         const ingredientResults = await searchIngredients(searchTerms || userText);
-                        searchContext += `\nAvailable Ingredients:\n${ingredientResults}\n`;
+                        searchContext += `\nAvailable Ingredients:\n${ingredientResults.text}\n`;
+                        foundProducts = ingredientResults.products;
+                        setLastSearchProducts(foundProducts);
                     }
 
                     if (needsRecipeSearch) {
                         const recipeResults = await searchRecipes(searchTerms || userText);
-                        searchContext += `\nMatching Recipes:\n${recipeResults}\n`;
+                        searchContext += `\nMatching Recipes:\n${recipeResults.text}\n`;
+                        foundRecipes = recipeResults.recipes;
+                        setLastSearchRecipes(foundRecipes);
                     }
 
                     searchContext += '\n[END SEARCH RESULTS]\n\nPlease use the above real data to answer the user\'s question:';
@@ -299,6 +378,19 @@ const ChatWidget: React.FC = () => {
                             : msg
                     ));
                 }
+
+                // After streaming, add product/recipe cards if found
+                if (foundProducts.length > 0 || foundRecipes.length > 0) {
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === agentMsgId
+                            ? {
+                                ...msg,
+                                productCards: foundProducts.length > 0 ? foundProducts : undefined,
+                                recipeCards: foundRecipes.length > 0 ? foundRecipes : undefined
+                            }
+                            : msg
+                    ));
+                }
             } else {
                 throw new Error('Chat session not available');
             }
@@ -308,24 +400,74 @@ const ChatWidget: React.FC = () => {
             let errorMessage = "I apologize, but I'm temporarily unavailable. Please try again in a moment.";
 
             if (error.message?.includes('429') || JSON.stringify(error).includes('429')) {
-                errorMessage = "Steward Quota Exceeded: The AI API key has reached its free tier limit. Please check your Google AI Studio quota or provide a fresh API key.";
+                errorMessage = "Support Quota Exceeded: The AI API key has reached its free tier limit. Please check your Google AI Studio quota or provide a fresh API key.";
             }
 
             setMessages(prev => prev.map(msg =>
                 msg.id === agentMsgId
-                    ? { ...msg, text: errorMessage, isStreaming: false }
+                    ? { ...msg, text: errorMessage }
                     : msg
             ));
         } finally {
             setIsTyping(false);
             setIsSearching(false);
-            setMessages(prev => prev.map(msg =>
-                msg.id === agentMsgId
-                    ? { ...msg, isStreaming: false }
-                    : msg
-            ));
         }
     };
+
+    // Render product card
+    const renderProductCard = (product: ProductCard) => (
+        <div key={product.id} className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 shadow-sm">
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                {product.image ? (
+                    <img src={product.image} alt={product.name} className="w-full h-full object-cover" />
+                ) : (
+                    <span className="text-2xl">🥬</span>
+                )}
+            </div>
+            <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm text-black truncate">{product.name}</p>
+                <p className="text-xs text-gray-500">{product.category} • ${product.price.toFixed(2)}</p>
+            </div>
+            <div className="flex gap-1">
+                <button
+                    onClick={() => handleAddToCart(product.id)}
+                    className="p-2 bg-black text-white rounded-lg hover:bg-gray-800 transition-all active:scale-95"
+                    title="Add to Cart"
+                >
+                    <ShoppingCart size={14} />
+                </button>
+                <button
+                    onClick={() => handleViewProduct(product.id)}
+                    className="p-2 bg-gray-100 text-black rounded-lg hover:bg-gray-200 transition-all active:scale-95"
+                    title="View Product"
+                >
+                    <ExternalLink size={14} />
+                </button>
+            </div>
+        </div>
+    );
+
+    // Render recipe card
+    const renderRecipeCard = (recipe: RecipeCard) => (
+        <div
+            key={recipe.id}
+            onClick={() => handleViewRecipe(recipe.id)}
+            className="flex items-center gap-3 p-3 bg-white rounded-xl border border-gray-200 shadow-sm cursor-pointer hover:border-black transition-all"
+        >
+            <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center overflow-hidden">
+                {recipe.image ? (
+                    <img src={recipe.image} alt={recipe.title} className="w-full h-full object-cover" />
+                ) : (
+                    <BookOpen size={20} className="text-gray-400" />
+                )}
+            </div>
+            <div className="flex-1 min-w-0">
+                <p className="font-bold text-sm text-black truncate">{recipe.title}</p>
+                <p className="text-xs text-gray-500">{recipe.ingredientCount} ingredients</p>
+            </div>
+            <ExternalLink size={14} className="text-gray-400" />
+        </div>
+    );
 
     return (
         <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end font-sans">
@@ -429,6 +571,20 @@ const ChatWidget: React.FC = () => {
                                     </p>
                                 </div>
 
+                                {/* Product Cards */}
+                                {msg.productCards && msg.productCards.length > 0 && (
+                                    <div className="mt-3 space-y-2">
+                                        {msg.productCards.map(renderProductCard)}
+                                    </div>
+                                )}
+
+                                {/* Recipe Cards */}
+                                {msg.recipeCards && msg.recipeCards.length > 0 && (
+                                    <div className="mt-3 space-y-2">
+                                        {msg.recipeCards.map(renderRecipeCard)}
+                                    </div>
+                                )}
+
                                 <button
                                     onClick={() => handleCopy(msg.id, msg.text)}
                                     className={`
@@ -477,10 +633,10 @@ const ChatWidget: React.FC = () => {
                             Pasta recipe?
                         </button>
                         <button
-                            onClick={() => handlePromptClick("Any keto-friendly snack ideas?")}
+                            onClick={() => handlePromptClick("What's in my cart?")}
                             className="whitespace-nowrap px-4 py-2 rounded-full bg-gray-100 text-[11px] font-bold text-black border border-black/5 hover:bg-black hover:text-white transition-all active:scale-95"
                         >
-                            Keto snacks?
+                            My cart?
                         </button>
                     </div>
                     <div className="relative flex flex-col items-center">
