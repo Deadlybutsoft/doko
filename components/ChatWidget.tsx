@@ -43,7 +43,7 @@ const ChatWidget: React.FC = () => {
         }
         const ai = new GoogleGenAI({ apiKey });
         return ai.chats.create({
-            model: 'gemini-2.0-flash',
+            model: 'gemini-2.0-flash-lite',
             config: {
                 systemInstruction: SYSTEM_PROMPT,
             },
@@ -128,7 +128,19 @@ const ChatWidget: React.FC = () => {
         if (textareaRef.current) {
             textareaRef.current.style.height = 'auto';
         }
+
+        // Create logic for streaming response
         setIsTyping(true);
+        const agentMsgId = (Date.now() + 1).toString();
+
+        // Add placeholder message for streaming
+        setMessages(prev => [...prev, {
+            id: agentMsgId,
+            text: '', // Start empty
+            sender: 'agent',
+            timestamp: new Date(),
+            isStreaming: true
+        } as Message & { isStreaming?: boolean }]);
 
         try {
             if (!chatSessionRef.current) {
@@ -136,32 +148,41 @@ const ChatWidget: React.FC = () => {
             }
 
             if (chatSessionRef.current) {
-                const response = await chatSessionRef.current.sendMessage({ message: userText });
-                const responseText = response.text;
+                // Use streaming interface
+                const result = await chatSessionRef.current.sendMessageStream({ message: userText });
 
-                if (responseText) {
-                    const newAgentMessage: Message = {
-                        id: (Date.now() + 1).toString(),
-                        text: responseText,
-                        sender: 'agent',
-                        timestamp: new Date(),
-                    };
-                    setMessages((prev) => [...prev, newAgentMessage]);
+                let fullText = '';
+                for await (const chunk of result) {
+                    const chunkText = chunk.text();
+                    fullText += chunkText;
+
+                    // Update the last message with accumulated text
+                    setMessages(prev => prev.map(msg =>
+                        msg.id === agentMsgId
+                            ? { ...msg, text: fullText }
+                            : msg
+                    ));
                 }
             } else {
                 throw new Error('Chat session not available');
             }
         } catch (error) {
             console.error("Error communicating with AI:", error);
-            const errorMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                text: "I apologize, but I'm temporarily unavailable. Please try again in a moment.",
-                sender: 'agent',
-                timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, errorMessage]);
+
+            // Replace the streaming message with error if empty, or append error
+            setMessages(prev => prev.map(msg =>
+                msg.id === agentMsgId
+                    ? { ...msg, text: "I apologize, but I'm temporarily unavailable. Please try again in a moment.", isStreaming: false }
+                    : msg
+            ));
         } finally {
             setIsTyping(false);
+            // Mark streaming as done
+            setMessages(prev => prev.map(msg =>
+                msg.id === agentMsgId
+                    ? { ...msg, isStreaming: false }
+                    : msg
+            ));
         }
     };
 
@@ -181,6 +202,13 @@ const ChatWidget: React.FC = () => {
         }
         .label-animate {
           animation: slideIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(5px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .message-fade-in {
+            animation: fadeIn 0.3s ease-out forwards;
         }
       `}</style>
 
@@ -230,7 +258,7 @@ const ChatWidget: React.FC = () => {
                     {messages.map((msg) => (
                         <div
                             key={msg.id}
-                            className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
+                            className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'} message-fade-in`}
                         >
                             <div className="relative group max-w-[85%]">
                                 <div
@@ -267,8 +295,8 @@ const ChatWidget: React.FC = () => {
                         </div>
                     ))}
 
-                    {isTyping && (
-                        <div className="flex justify-start">
+                    {isTyping && messages[messages.length - 1]?.sender !== 'agent' && (
+                        <div className="flex justify-start message-fade-in">
                             <div className="bg-gray-100 px-6 py-5 rounded-[1.75rem] rounded-tl-none flex space-x-2">
                                 <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
                                 <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '200ms' }}></div>
@@ -300,7 +328,7 @@ const ChatWidget: React.FC = () => {
 
                                 <button
                                     type="submit"
-                                    disabled={!inputValue.trim() || isTyping}
+                                    disabled={!inputValue.trim() || (isTyping && messages[messages.length - 1]?.sender !== 'agent')}
                                     className={`
                     p-2.5 rounded-2xl transition-all duration-500 flex items-center justify-center shrink-0
                     ${inputValue.trim() && !isTyping
