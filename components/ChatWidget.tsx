@@ -47,7 +47,7 @@ const searchRecipes = async (query: string): Promise<string> => {
 };
 
 // Enhanced system prompt with retrieval instructions
-const SYSTEM_PROMPT = `You are the DOKO Steward, a premium culinary assistant for a luxury grocery platform called DOKO.
+const SYSTEM_PROMPT = `You are DOKO Support, a premium culinary assistant for a luxury grocery platform called DOKO.
 
 YOUR CAPABILITIES:
 1. You have access to DOKO's inventory of 23,000+ premium ingredients
@@ -67,14 +67,14 @@ You are connected to Algolia's search infrastructure for real-time inventory and
 const INITIAL_MESSAGES: Message[] = [
     {
         id: '1',
-        text: 'Welcome to Doko. I am your culinary steward, connected to our inventory of 23,000+ ingredients and professional recipe database. How may I assist you today?',
+        text: 'Welcome to Doko. I am Doko Support, connected to our inventory of 23,000+ ingredients and professional recipe database. How may I assist you today?',
         sender: 'agent',
         timestamp: new Date(),
     },
 ];
 
 const AGENT: Agent = {
-    name: 'Doko Steward',
+    name: 'Doko Support',
     avatar: '',
     status: 'online',
 };
@@ -333,7 +333,7 @@ const ChatWidget: React.FC = () => {
                 className={`
           transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) transform origin-bottom-right
           ${isOpen ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-0 translate-y-8 pointer-events-none'}
-          mb-6 w-[350px] sm:w-[400px] h-[600px] max-h-[85vh]
+          mb-6 w-[380px] sm:w-[480px] h-[720px] max-h-[85vh]
           bg-white rounded-[2.5rem] shadow-[0_25px_60px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden border border-gray-100
         `}
             >
@@ -341,7 +341,7 @@ const ChatWidget: React.FC = () => {
                 <div className="bg-white px-7 py-6 flex items-center justify-between border-b border-gray-100 shrink-0">
                     <div className="flex items-center space-x-2">
                         <h3 className="font-bold text-xl tracking-tight text-black flex items-center leading-none">
-                            Doko Steward
+                            Doko Support
                         </h3>
                         <span className="flex items-center">
                             <span className={`w-2 h-2 rounded-full ${isSearching ? 'bg-blue-500 searching' : 'bg-green-500 animate-pulse'}`}></span>
@@ -512,7 +512,7 @@ const ChatWidget: React.FC = () => {
                             <div className="absolute -top-1 -right-1 w-3 h-3 bg-[#C6A355] rounded-full border-2 border-white"></div>
                         </div>
                         <span className="font-semibold text-base text-black label-animate">
-                            Steward
+                            Support
                         </span>
                     </>
                 )}
