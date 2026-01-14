@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageCircle, X, ArrowUp, Trash2, Copy, Check, Search, ShoppingCart, ExternalLink, BookOpen } from 'lucide-react';
-import { GoogleGenAI, Chat } from "@google/genai";
+import { GoogleGenerativeAI, ChatSession } from "@google/generative-ai";
 import { algoliasearch } from 'algoliasearch';
 import { Message, Agent, Product, Recipe } from '../types';
 import { products } from '../data';
@@ -188,7 +188,7 @@ const ChatWidget: React.FC = () => {
 
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
-    const chatSessionRef = useRef<Chat | null>(null);
+    const chatSessionRef = useRef<ChatSession | null>(null);
 
     // Build user context strings from store
     const getCartInfo = (): string => {
@@ -218,13 +218,14 @@ const ChatWidget: React.FC = () => {
             console.error('Google AI API key not found');
             return null;
         }
-        const ai = new GoogleGenAI({ apiKey });
+        const genAI = new GoogleGenerativeAI(apiKey);
         const systemPrompt = getSystemPrompt(getCartInfo(), getSavedRecipesInfo(), getWishlistInfo());
-        return ai.chats.create({
-            model: 'gemini-2.5-flash',
-            config: {
-                systemInstruction: systemPrompt,
-            },
+        const model = genAI.getGenerativeModel({
+            model: 'gemini-2.5-flash-lite',
+            systemInstruction: systemPrompt
+        });
+
+        return model.startChat({
             history: [
                 {
                     role: 'model',
@@ -405,11 +406,11 @@ const ChatWidget: React.FC = () => {
                 }
 
                 // STREAMING: Send to AI and stream response
-                const result = await chatSessionRef.current.sendMessageStream({ message: contextualPrompt });
+                const result = await chatSessionRef.current.sendMessageStream(contextualPrompt);
 
                 let fullText = '';
-                for await (const chunk of result) {
-                    const chunkText = chunk.text;
+                for await (const chunk of result.stream) {
+                    const chunkText = chunk.text();
                     fullText += chunkText;
 
                     // Update message with streamed text
