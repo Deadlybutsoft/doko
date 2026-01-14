@@ -153,7 +153,7 @@ const ChatWidget: React.FC = () => {
 
                 let fullText = '';
                 for await (const chunk of result) {
-                    const chunkText = chunk.text();
+                    const chunkText = chunk.text;
                     fullText += chunkText;
 
                     // Update the last message with accumulated text
@@ -166,13 +166,18 @@ const ChatWidget: React.FC = () => {
             } else {
                 throw new Error('Chat session not available');
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error communicating with AI:", error);
 
-            // Replace the streaming message with error if empty, or append error
+            let errorMessage = "I apologize, but I'm temporarily unavailable. Please try again in a moment.";
+
+            if (error.message?.includes('429') || JSON.stringify(error).includes('429')) {
+                errorMessage = "Steward Quota Exceeded: The AI API key has reached its free tier limit. Please check your Google AI Studio quota or provide a fresh API key.";
+            }
+
             setMessages(prev => prev.map(msg =>
                 msg.id === agentMsgId
-                    ? { ...msg, text: "I apologize, but I'm temporarily unavailable. Please try again in a moment.", isStreaming: false }
+                    ? { ...msg, text: errorMessage, isStreaming: false }
                     : msg
             ));
         } finally {

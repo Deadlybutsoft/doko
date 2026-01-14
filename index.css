@@ -1,0 +1,10 @@
+/* Main application styles */
+:root {
+  --premium-bg: #062016;
+  --brand-secondary: #f0fdf4;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
