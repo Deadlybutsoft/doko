@@ -1,5 +1,65 @@
 @import "tailwindcss";
 
+@theme {
+  --font-family-sans: "Instrument Sans", sans-serif;
+  --font-family-display: "Space Grotesque", sans-serif;
+
+  --color-black: #000000;
+  --color-white: #ffffff;
+  --color-brand-primary: #000000;
+  --color-premium-bg: #062016;
+  --color-brand-secondary: #f0fdf4;
+  --color-brand-accent: #3f6212;
+
+  --color-zinc-50: #f9f9f9;
+  --color-zinc-100: #fafafa;
+  --color-zinc-200: #f4f4f5;
+  --color-zinc-300: #e4e4e7;
+  --color-zinc-400: #d4d4d8;
+  --color-zinc-500: #a1a1aa;
+  --color-zinc-600: #71717a;
+  --color-zinc-700: #3f3f46;
+  --color-zinc-800: #27272a;
+  --color-zinc-900: #18181b;
+  --color-zinc-950: #09090b;
+
+  --animate-fade-in: fadeIn 0.5s ease-out forwards;
+  --animate-slide-up: slideUp 0.6s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  --animate-slide-in-right: slideInRight 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeIn {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+@keyframes slideUp {
+  0% {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideInRight {
+  0% {
+    transform: translateX(100%);
+  }
+
+  100% {
+    transform: translateX(0%);
+  }
+}
+
 /* Main application styles */
 :root {
   --premium-bg: #062016;
