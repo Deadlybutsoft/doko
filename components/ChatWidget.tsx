@@ -1,18 +1,73 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, ArrowUp, Trash2, Copy, Check } from 'lucide-react';
+import { MessageCircle, X, ArrowUp, Trash2, Copy, Check, Search } from 'lucide-react';
 import { GoogleGenAI, Chat } from "@google/genai";
+import algoliasearch from 'algoliasearch';
 import { Message, Agent } from '../types';
+import { products } from '../data';
 
-const SYSTEM_PROMPT = `You are the DOKO Steward, a premium culinary assistant for a luxury grocery platform called DOKO. 
-You help customers discover ingredients, suggest recipes, and answer questions about products.
-Keep responses concise (2-3 sentences max). Be helpful, sophisticated, and knowledgeable about food.
-You can help with: finding ingredients, suggesting recipes, dietary advice, and general grocery questions.
-Always maintain a professional yet warm tone.`;
+// Initialize Algolia client
+const algoliaClient = algoliasearch(
+    import.meta.env.VITE_ALGOLIA_APP_ID,
+    import.meta.env.VITE_ALGOLIA_SEARCH_KEY
+);
+
+// Search functions for Algolia retrieval
+const searchIngredients = async (query: string): Promise<string> => {
+    // Search local products (from ingredients_final.json)
+    const localResults = products.filter(p =>
+        p.name.toLowerCase().includes(query.toLowerCase()) ||
+        p.category.toLowerCase().includes(query.toLowerCase())
+    ).slice(0, 5);
+
+    if (localResults.length > 0) {
+        return localResults.map(p =>
+            `- ${p.name} (${p.category}) - $${p.price.toFixed(2)}`
+        ).join('\n');
+    }
+    return 'No ingredients found matching your query.';
+};
+
+const searchRecipes = async (query: string): Promise<string> => {
+    try {
+        const { hits } = await algoliaClient.search([{
+            indexName: 'food',
+            params: { query, hitsPerPage: 5 }
+        }]).then(res => res.results[0] as any);
+
+        if (hits && hits.length > 0) {
+            return hits.map((hit: any) =>
+                `- "${hit.title}" (${hit.ingredients?.length || 0} ingredients)`
+            ).join('\n');
+        }
+        return 'No recipes found matching your query.';
+    } catch (error) {
+        console.error('Recipe search error:', error);
+        return 'Unable to search recipes at the moment.';
+    }
+};
+
+// Enhanced system prompt with retrieval instructions
+const SYSTEM_PROMPT = `You are the DOKO Steward, a premium culinary assistant for a luxury grocery platform called DOKO.
+
+YOUR CAPABILITIES:
+1. You have access to DOKO's inventory of 23,000+ premium ingredients
+2. You can search professional recipe databases powered by Algolia
+3. You can help customers find ingredients, suggest recipes, and answer culinary questions
+
+BEHAVIOR GUIDELINES:
+- Keep responses concise (2-3 sentences max)
+- Be helpful, sophisticated, and knowledgeable about food
+- When you receive [SEARCH RESULTS], use that real data to inform your response
+- If asked about specific ingredients or recipes, reference the search results provided
+- Always maintain a professional yet warm tone
+- When recommending products, mention their category and price when available
+
+You are connected to Algolia's search infrastructure for real-time inventory and recipe data.`;
 
 const INITIAL_MESSAGES: Message[] = [
     {
         id: '1',
-        text: 'Welcome to Doko. I am your culinary steward. How may I assist you today?',
+        text: 'Welcome to Doko. I am your culinary steward, connected to our inventory of 23,000+ ingredients and professional recipe database. How may I assist you today?',
         sender: 'agent',
         timestamp: new Date(),
     },
@@ -24,12 +79,17 @@ const AGENT: Agent = {
     status: 'online',
 };
 
+// Keywords that trigger search
+const INGREDIENT_KEYWORDS = ['ingredient', 'have', 'stock', 'find', 'looking for', 'need', 'buy', 'purchase', 'get', 'available'];
+const RECIPE_KEYWORDS = ['recipe', 'cook', 'make', 'prepare', 'dish', 'meal', 'dinner', 'lunch', 'breakfast'];
+
 const ChatWidget: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
     const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
     const [inputValue, setInputValue] = useState('');
     const [isTyping, setIsTyping] = useState(false);
     const [copiedId, setCopiedId] = useState<string | null>(null);
+    const [isSearching, setIsSearching] = useState(false);
 
     const chatContainerRef = useRef<HTMLDivElement>(null);
     const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -43,7 +103,7 @@ const ChatWidget: React.FC = () => {
         }
         const ai = new GoogleGenAI({ apiKey });
         return ai.chats.create({
-            model: 'gemini-2.0-flash-lite',
+            model: 'gemini-2.5-flash',
             config: {
                 systemInstruction: SYSTEM_PROMPT,
             },
@@ -110,6 +170,19 @@ const ChatWidget: React.FC = () => {
         }
     };
 
+    // Detect if query needs retrieval and what type
+    const analyzeQuery = (query: string): { needsIngredientSearch: boolean; needsRecipeSearch: boolean; searchTerms: string } => {
+        const lowerQuery = query.toLowerCase();
+        const needsIngredientSearch = INGREDIENT_KEYWORDS.some(k => lowerQuery.includes(k));
+        const needsRecipeSearch = RECIPE_KEYWORDS.some(k => lowerQuery.includes(k));
+
+        // Extract key nouns (simple extraction)
+        const words = query.split(/\s+/).filter(w => w.length > 3);
+        const searchTerms = words.slice(0, 3).join(' ');
+
+        return { needsIngredientSearch, needsRecipeSearch, searchTerms };
+    };
+
     const handleSendMessage = async (e?: React.FormEvent) => {
         e?.preventDefault();
         if (!inputValue.trim()) return;
@@ -129,14 +202,12 @@ const ChatWidget: React.FC = () => {
             textareaRef.current.style.height = 'auto';
         }
 
-        // Create logic for streaming response
         setIsTyping(true);
         const agentMsgId = (Date.now() + 1).toString();
 
-        // Add placeholder message for streaming
         setMessages(prev => [...prev, {
             id: agentMsgId,
-            text: '', // Start empty
+            text: '',
             sender: 'agent',
             timestamp: new Date(),
             isStreaming: true
@@ -148,15 +219,39 @@ const ChatWidget: React.FC = () => {
             }
 
             if (chatSessionRef.current) {
-                // Use streaming interface
-                const result = await chatSessionRef.current.sendMessageStream({ message: userText });
+                // Analyze query for retrieval needs
+                const { needsIngredientSearch, needsRecipeSearch, searchTerms } = analyzeQuery(userText);
+
+                let contextualPrompt = userText;
+
+                // Perform Algolia retrieval if needed
+                if (needsIngredientSearch || needsRecipeSearch) {
+                    setIsSearching(true);
+                    let searchContext = '\n\n[SEARCH RESULTS FROM ALGOLIA]:\n';
+
+                    if (needsIngredientSearch) {
+                        const ingredientResults = await searchIngredients(searchTerms || userText);
+                        searchContext += `\nAvailable Ingredients:\n${ingredientResults}\n`;
+                    }
+
+                    if (needsRecipeSearch) {
+                        const recipeResults = await searchRecipes(searchTerms || userText);
+                        searchContext += `\nMatching Recipes:\n${recipeResults}\n`;
+                    }
+
+                    searchContext += '\n[END SEARCH RESULTS]\n\nPlease use the above real data to answer the user\'s question:';
+                    contextualPrompt = searchContext + '\n\nUser Question: ' + userText;
+                    setIsSearching(false);
+                }
+
+                // Send to AI with retrieved context
+                const result = await chatSessionRef.current.sendMessageStream({ message: contextualPrompt });
 
                 let fullText = '';
                 for await (const chunk of result) {
                     const chunkText = chunk.text;
                     fullText += chunkText;
 
-                    // Update the last message with accumulated text
                     setMessages(prev => prev.map(msg =>
                         msg.id === agentMsgId
                             ? { ...msg, text: fullText }
@@ -182,7 +277,7 @@ const ChatWidget: React.FC = () => {
             ));
         } finally {
             setIsTyping(false);
-            // Mark streaming as done
+            setIsSearching(false);
             setMessages(prev => prev.map(msg =>
                 msg.id === agentMsgId
                     ? { ...msg, isStreaming: false }
@@ -215,6 +310,13 @@ const ChatWidget: React.FC = () => {
         .message-fade-in {
             animation: fadeIn 0.3s ease-out forwards;
         }
+        @keyframes pulse-search {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        .searching {
+          animation: pulse-search 1s ease-in-out infinite;
+        }
       `}</style>
 
             {/* Chat Window */}
@@ -233,8 +335,13 @@ const ChatWidget: React.FC = () => {
                             Doko Steward
                         </h3>
                         <span className="flex items-center">
-                            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+                            <span className={`w-2 h-2 rounded-full ${isSearching ? 'bg-blue-500 searching' : 'bg-green-500 animate-pulse'}`}></span>
                         </span>
+                        {isSearching && (
+                            <span className="text-[10px] text-blue-500 font-medium flex items-center gap-1">
+                                <Search size={10} /> Searching...
+                            </span>
+                        )}
                     </div>
 
                     <div className="flex items-center space-x-1">
@@ -326,7 +433,7 @@ const ChatWidget: React.FC = () => {
                                     value={inputValue}
                                     onChange={handleInputChange}
                                     onKeyDown={handleKeyDown}
-                                    placeholder="Ask anything..."
+                                    placeholder="Ask about ingredients, recipes..."
                                     rows={1}
                                     className="flex-1 bg-transparent border-none py-1 text-[17px] sm:text-[18px] font-semibold text-black placeholder:text-gray-400 focus:ring-0 outline-none resize-none overflow-hidden max-h-[150px] leading-tight hide-scrollbar"
                                 />
