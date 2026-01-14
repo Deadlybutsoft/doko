@@ -229,7 +229,7 @@ const ChatWidget: React.FC = () => {
             history: [
                 {
                     role: 'user',
-                    parts: [{ text: 'Hello' }],
+                    parts: [{ text: 'Hello, who are you?' }],
                 },
                 {
                     role: 'model',
