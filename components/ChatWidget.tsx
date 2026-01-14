@@ -1,128 +1,166 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageCircle, X, ArrowUp, Trash2, Copy, Check } from 'lucide-react';
-import { Message, Agent } from '../types';
-
-// For the hackathon, we'll want to use Algolia's Agent Studio.
-// This widget currently uses a custom UI structure.
-// We'll fix the "Angolia" typo and prepare it for the challenge.
-
-const INITIAL_MESSAGES: Message[] = [
-    {
-        id: '1',
-        text: 'Welcome to Doko Support. How can we help you today?',
-        sender: 'agent',
-        timestamp: new Date(),
-    },
-];
-
-const AGENT: Agent = {
-    name: 'Doko Support',
-    avatar: '',
-    status: 'online',
-};
+import { MessageCircle, X } from 'lucide-react';
+import instantsearch from 'instantsearch.js';
+import { chat } from 'instantsearch.js/es/widgets';
+import { useStore } from '../context/StoreContext';
 
 const ChatWidget: React.FC = () => {
     const [isOpen, setIsOpen] = useState(false);
-    const [messages, setMessages] = useState<Message[]>(INITIAL_MESSAGES);
-    const [inputValue, setInputValue] = useState('');
-    const [isTyping, setIsTyping] = useState(false);
-    const [copiedId, setCopiedId] = useState<string | null>(null);
+    const { addToCart, allProducts } = useStore();
+    const searchInstance = useRef<any>(null);
+    const containerRef = useRef<HTMLDivElement>(null);
 
-    // Ref for the scrollable container
-    const chatContainerRef = useRef<HTMLDivElement>(null);
-    const textareaRef = useRef<HTMLTextAreaElement>(null);
+    useEffect(() => {
+        if (!searchInstance.current) {
+            searchInstance.current = instantsearch({
+                indexName: 'food', // Generic index, the chat uses agentId mainly
+                searchClient: {
+                    search: () => Promise.resolve({ results: [] }) as any, // Mock client as chat uses transport
+                },
+            });
+
+            searchInstance.current.addWidgets([
+                chat({
+                    container: '#ais-chat-container',
+                    agentId: import.meta.env.VITE_ALGOLIA_AGENT_ID,
+                    templates: {
+                        header: {
+                            titleText: 'Doko Steward',
+                        }
+                    },
+                    cssClasses: {
+                        root: 'doko-chat-root',
+                        container: 'doko-chat-container',
+                        header: {
+                            root: 'doko-chat-header',
+                            title: 'doko-chat-title',
+                        },
+                        messages: {
+                            root: 'doko-chat-messages',
+                            content: 'doko-chat-messages-content',
+                        },
+                        message: {
+                            root: 'doko-chat-message',
+                            container: 'doko-chat-message-container',
+                        },
+                        prompt: {
+                            root: 'doko-chat-prompt',
+                            textarea: 'doko-chat-textarea',
+                            submit: 'doko-chat-submit',
+                        }
+                    },
+                    tools: {
+                        addToCart: {
+                            templates: {
+                                layout: ({ message }: any, { html }: any) => {
+                                    const input = message.input as any;
+                                    return html`
+                                        <div class="bg-black/5 p-3 rounded-xl border border-black/10 text-xs">
+                                            <p class="font-bold">🛒 Purchasing Logic</p>
+                                            <p class="opacity-60">Adding ${input.objectID} to bag...</p>
+                                        </div>
+                                    `;
+                                }
+                            },
+                            onToolCall: async ({ message, addToolResult }: any) => {
+                                const input = message.input as any;
+                                const product = allProducts.find(p => p.id === input.objectID);
+                                if (product) {
+                                    addToCart(product, 1);
+                                    addToolResult({
+                                        output: {
+                                            text: `Successfully added ${product.name} to your bag.`,
+                                            done: true,
+                                        }
+                                    });
+                                } else {
+                                    addToolResult({
+                                        output: {
+                                            text: `I couldn't find that product in our catalog.`,
+                                            done: false,
+                                        }
+                                    });
+                                }
+                            }
+                        }
+                    }
+                })
+            ]);
+
+            searchInstance.current.start();
+        }
+
+        return () => {
+            if (searchInstance.current) {
+                searchInstance.current.dispose();
+                searchInstance.current = null;
+            }
+        };
+    }, [allProducts, addToCart]);
 
     const toggleChat = () => {
         setIsOpen(!isOpen);
     };
 
-    const handleClearChat = () => {
-        setMessages(INITIAL_MESSAGES);
-    };
-
-    const scrollToBottom = () => {
-        if (chatContainerRef.current) {
-            const { scrollHeight, clientHeight } = chatContainerRef.current;
-            const maxScrollTop = scrollHeight - clientHeight;
-            chatContainerRef.current.scrollTo({
-                top: maxScrollTop > 0 ? maxScrollTop : 0,
-                behavior: 'smooth'
-            });
-        }
-    };
-
-    useEffect(() => {
-        const timeoutId = setTimeout(() => scrollToBottom(), 100);
-        return () => clearTimeout(timeoutId);
-    }, [messages, isOpen, isTyping]);
-
-    const handleInputChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-        setInputValue(e.target.value);
-        if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-            textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 150)}px`;
-        }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSendMessage();
-        }
-    };
-
-    const handleCopy = async (id: string, text: string) => {
-        try {
-            await navigator.clipboard.writeText(text);
-            setCopiedId(id);
-            setTimeout(() => setCopiedId(null), 2000);
-        } catch (err) {
-            console.error('Failed to copy text: ', err);
-        }
-    };
-
-    const handleSendMessage = async (e?: React.FormEvent) => {
-        e?.preventDefault();
-        if (!inputValue.trim()) return;
-
-        const userText = inputValue.trim();
-
-        const newUserMessage: Message = {
-            id: Date.now().toString(),
-            text: userText,
-            sender: 'user',
-            timestamp: new Date(),
-        };
-
-        setMessages((prev) => [...prev, newUserMessage]);
-        setInputValue('');
-        if (textareaRef.current) {
-            textareaRef.current.style.height = 'auto';
-        }
-        setIsTyping(true);
-
-        // Mock AI Response for now - will be connected to Algolia Agent Studio
-        setTimeout(() => {
-            const newAgentMessage: Message = {
-                id: (Date.now() + 1).toString(),
-                text: "I'm the Doko Steward. I'm currently being connected to our Algolia-powered knowledge base to better assist you with recipes and ingredients!",
-                sender: 'agent',
-                timestamp: new Date(),
-            };
-            setMessages((prev) => [...prev, newAgentMessage]);
-            setIsTyping(false);
-        }, 1000);
-    };
-
     return (
         <div className="fixed bottom-6 right-6 z-[100] flex flex-col items-end font-sans">
             <style>{`
-        .hide-scrollbar::-webkit-scrollbar {
-          display: none;
+        .doko-chat-root {
+          height: 100%;
+          display: flex;
+          flex-direction: column;
+          background: white;
         }
-        .hide-scrollbar {
-          -ms-overflow-style: none;
-          scrollbar-width: none;
+        .doko-chat-container {
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .doko-chat-header {
+          display: none; /* We use our own header */
+        }
+        .doko-chat-messages {
+          flex: 1;
+          overflow-y: auto;
+          padding: 1.5rem;
+          background: #fafafa;
+        }
+        .ais-Chat-message--user .ais-Chat-message-container {
+            background: black !important;
+            color: white !important;
+            border-radius: 1.5rem 1.5rem 0 1.5rem !important;
+        }
+        .ais-Chat-message--assistant .ais-Chat-message-container {
+            background: #f3f4f6 !important;
+            color: black !important;
+            border-radius: 1.5rem 1.5rem 1.5rem 0 !important;
+        }
+        .doko-chat-prompt {
+            padding: 1.5rem;
+            border-top: 1px solid #f3f4f6;
+            background: white;
+        }
+        .doko-chat-textarea {
+            width: 100%;
+            border: 1.5px solid #e5e7eb;
+            border-radius: 1rem;
+            padding: 0.75rem 1rem;
+            font-weight: 600;
+            outline: none;
+            transition: all 0.2s;
+            resize: none;
+        }
+        .doko-chat-textarea:focus {
+            border-color: black;
+            background: white;
+        }
+        .doko-chat-submit {
+            background: black;
+            color: white;
+            border-radius: 0.75rem;
+            padding: 0.5rem 1rem;
+            font-weight: bold;
+            margin-top: 0.5rem;
         }
         @keyframes slideIn {
           from { transform: translateX(20px); opacity: 0; }
@@ -138,7 +176,7 @@ const ChatWidget: React.FC = () => {
                 className={`
           transition-all duration-500 cubic-bezier(0.4, 0, 0.2, 1) transform origin-bottom-right
           ${isOpen ? 'scale-100 opacity-100 translate-y-0' : 'scale-95 opacity-0 translate-y-8 pointer-events-none'}
-          mb-6 w-[350px] sm:w-[400px] h-[600px] max-h-[85vh]
+          mb-6 w-[350px] sm:w-[420px] h-[650px] max-h-[85vh]
           bg-white rounded-[2.5rem] shadow-[0_25px_60px_rgba(0,0,0,0.18)] flex flex-col overflow-hidden border border-gray-100
         `}
             >
@@ -146,125 +184,27 @@ const ChatWidget: React.FC = () => {
                 <div className="bg-white px-7 py-6 flex items-center justify-between border-b border-gray-100 shrink-0">
                     <div className="flex items-center space-x-2">
                         <h3 className="font-bold text-xl tracking-tight text-black flex items-center leading-none">
-                            Doko Support
+                            Doko Steward
                         </h3>
                         <span className="flex items-center">
                             <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
                         </span>
                     </div>
 
-                    <div className="flex items-center space-x-1">
-                        <button
-                            onClick={handleClearChat}
-                            className="text-gray-400 hover:text-red-500 p-2 rounded-full transition-all"
-                            title="Clear History"
-                        >
-                            <Trash2 size={18} />
-                        </button>
-
-                        <button
-                            onClick={toggleChat}
-                            className="text-gray-400 hover:text-black p-2 rounded-full transition-all"
-                        >
-                            <X size={22} />
-                        </button>
-                    </div>
+                    <button
+                        onClick={toggleChat}
+                        className="text-gray-400 hover:text-black p-2 rounded-full transition-all"
+                    >
+                        <X size={22} />
+                    </button>
                 </div>
 
-                {/* Messages Area */}
-                <div
-                    ref={chatContainerRef}
-                    className="flex-1 overflow-y-auto pt-8 px-7 bg-white space-y-7 hide-scrollbar scroll-smooth"
-                >
-                    {messages.map((msg) => (
-                        <div
-                            key={msg.id}
-                            className={`flex ${msg.sender === 'user' ? 'justify-end' : 'justify-start'}`}
-                        >
-                            <div className="relative group max-w-[85%]">
-                                <div
-                                    className={`
-                    px-5 py-4 rounded-[1.75rem] text-[15px] leading-relaxed
-                    ${msg.sender === 'user'
-                                            ? 'bg-black text-white rounded-tr-none shadow-lg shadow-black/10'
-                                            : 'bg-gray-100 text-black rounded-tl-none'
-                                        }
-                  `}
-                                >
-                                    <p className="font-medium whitespace-pre-wrap">{msg.text}</p>
-                                    <p className={`text-[9px] mt-2 font-bold uppercase tracking-widest ${msg.sender === 'user' ? 'text-gray-400' : 'text-gray-400'}`}>
-                                        {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                                    </p>
-                                </div>
+                {/* Algolia Chat Container */}
+                <div id="ais-chat-container" className="flex-1 overflow-hidden" />
 
-                                <button
-                                    onClick={() => handleCopy(msg.id, msg.text)}
-                                    className={`
-                    absolute top-1 transition-all duration-200 p-1.5 rounded-lg
-                    ${msg.sender === 'user' ? '-left-8' : '-right-8'}
-                    opacity-0 group-hover:opacity-100 bg-white shadow-sm border border-gray-100 text-gray-400 hover:text-black
-                  `}
-                                    title="Copy message"
-                                >
-                                    {copiedId === msg.id ? (
-                                        <Check size={14} className="text-green-500" />
-                                    ) : (
-                                        <Copy size={14} />
-                                    )}
-                                </button>
-                            </div>
-                        </div>
-                    ))}
-
-                    {isTyping && (
-                        <div className="flex justify-start">
-                            <div className="bg-gray-100 px-6 py-5 rounded-[1.75rem] rounded-tl-none flex space-x-2">
-                                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
-                                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '200ms' }}></div>
-                                <div className="w-1.5 h-1.5 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '400ms' }}></div>
-                            </div>
-                        </div>
-                    )}
-
-                    <div className="h-20 w-full shrink-0" />
-                </div>
-
-                {/* Input Area */}
-                <div className="px-5 pt-4 pb-2 bg-white shrink-0 border-t border-gray-50">
-                    <div className="relative flex flex-col items-center">
-                        <form
-                            onSubmit={handleSendMessage}
-                            className="w-full relative group transition-all duration-300"
-                        >
-                            <div className="flex items-center space-x-4 bg-gray-50 border-[1.5px] border-gray-200 focus-within:border-black focus-within:bg-white focus-within:shadow-[0_8px_30px_rgb(0,0,0,0.04)] rounded-[2rem] px-6 py-4 transition-all">
-                                <textarea
-                                    ref={textareaRef}
-                                    value={inputValue}
-                                    onChange={handleInputChange}
-                                    onKeyDown={handleKeyDown}
-                                    placeholder="Ask anything..."
-                                    rows={1}
-                                    className="flex-1 bg-transparent border-none py-1 text-[17px] sm:text-[18px] font-semibold text-black placeholder:text-gray-400 focus:ring-0 outline-none resize-none overflow-hidden max-h-[150px] leading-tight hide-scrollbar"
-                                />
-
-                                <button
-                                    type="submit"
-                                    disabled={!inputValue.trim() || isTyping}
-                                    className={`
-                    p-2.5 rounded-2xl transition-all duration-500 flex items-center justify-center shrink-0
-                    ${inputValue.trim() && !isTyping
-                                            ? 'bg-black text-white shadow-[0_8px_20px_rgba(0,0,0,0.2)] transform hover:scale-105 active:scale-95'
-                                            : 'bg-gray-200 text-gray-400'}
-                  `}
-                                >
-                                    <ArrowUp size={22} strokeWidth={3} className={`${inputValue.trim() && !isTyping ? 'animate-pulse' : ''}`} />
-                                </button>
-                            </div>
-                        </form>
-                        <div className="flex justify-center items-center mt-[4px]">
-                            <span className="text-[10px] font-medium text-gray-400/80">Powered by <span className="text-blue-400">Algolia</span></span>
-                        </div>
-                    </div>
+                {/* Brand Footer */}
+                <div className="flex justify-center items-center py-3 border-t border-gray-50 bg-white">
+                    <span className="text-[10px] font-medium text-gray-400/80">Powered by <span className="text-blue-400">Algolia Agent Studio</span></span>
                 </div>
             </div>
 

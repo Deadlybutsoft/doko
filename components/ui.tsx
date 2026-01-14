@@ -40,7 +40,7 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-export const Badge: React.FC<{ children: React.ReactNode, variant?: 'default' | 'outline' | 'black' }> = ({ children, variant = 'default' }) => {
+export const Badge: React.FC<{ children: React.ReactNode, variant?: 'default' | 'outline' | 'black', className?: string }> = ({ children, variant = 'default', className = '' }) => {
   const styles = {
     default: "bg-white/10 text-brand-secondary",
     outline: "border border-white/20 text-brand-secondary",
@@ -48,7 +48,7 @@ export const Badge: React.FC<{ children: React.ReactNode, variant?: 'default' | 
   };
 
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-tight ${styles[variant]}`}>
+    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold tracking-tight ${styles[variant]} ${className}`}>
       {children}
     </span>
   );
